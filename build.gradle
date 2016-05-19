@@ -1,0 +1,76 @@
+buildscript {
+	ext {
+		springBootVersion = '1.3.5.RELEASE'
+	}
+	repositories {
+        jcenter()
+		mavenCentral()
+	}
+	dependencies {
+		classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+        classpath 'au.com.dius:pact-jvm-provider-gradle_2.11:3.2.7'
+        classpath('com.github.jengelman.gradle.plugins:gradle-processes:0.3.0')
+	}
+}
+
+apply plugin: 'java'
+apply plugin: 'spring-boot'
+apply plugin: 'au.com.dius.pact'
+apply plugin: 'com.github.johnrengelman.processes'
+
+jar {
+	baseName = 'provider'
+	version = '0.0.1-SNAPSHOT'
+}
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+	mavenCentral()
+}
+
+
+dependencies {
+	compile('org.springframework.boot:spring-boot-starter-web')
+	testCompile('org.springframework.boot:spring-boot-starter-test')
+}
+
+
+task bootStart(type: com.github.jengelman.gradle.plugins.processes.tasks.JavaFork) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'com.expedia.demo.pact.ProviderApplication'
+    doLast {
+        Thread.sleep(10000)
+    }
+}
+
+task bootStop << {
+    bootStart.processHandle.abort()
+}
+
+pact {
+
+    reports {
+        defaultReports()
+        markdown
+    }
+
+    serviceProviders {
+        provider {
+            startProviderTask = bootStart
+
+            terminateProviderTask = bootStop
+
+            // Only load the pacts from the broker if the start tasks from the command line include pactVerify
+            if ('pactVerify' in gradle.startParameter.taskNames) {
+                hasPactsFromPactBroker('http://10.187.98.237/') { consumer ->
+                    stateChange = { providerState ->
+                        System.out.println("THE STATE IS: " + providerState)
+                        true
+                    }
+
+                }
+            }
+        }
+    }
+}
